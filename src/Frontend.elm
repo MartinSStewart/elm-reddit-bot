@@ -1,10 +1,13 @@
 module Frontend exposing (..)
 
+import Backend
 import Browser exposing (UrlRequest(..))
 import Browser.Navigation as Nav
 import Html
 import Html.Attributes as Attr
 import Lamdera
+import Process
+import Task
 import Types exposing (..)
 import Url
 
@@ -26,7 +29,7 @@ init url key =
     ( { key = key
       , message = "Welcome to Lamdera! You're looking at the auto-generated base implementation. Check out src/Frontend.elm to start coding!"
       }
-    , Cmd.none
+    , Process.sleep 1000 |> Task.andThen (\() -> Backend.requestAccessToken) |> Task.attempt RedditApiRequestMade_
     )
 
 
@@ -49,6 +52,13 @@ update msg model =
             ( model, Cmd.none )
 
         NoOpFrontendMsg ->
+            ( model, Cmd.none )
+
+        RedditApiRequestMade_ result ->
+            let
+                _ =
+                    Debug.log "a" result
+            in
             ( model, Cmd.none )
 
 

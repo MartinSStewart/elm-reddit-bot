@@ -2,6 +2,7 @@ module Types exposing (..)
 
 import Browser exposing (UrlRequest)
 import Browser.Navigation exposing (Key)
+import Http
 import Url exposing (Url)
 
 
@@ -20,6 +21,7 @@ type FrontendMsg
     = UrlClicked UrlRequest
     | UrlChanged Url
     | NoOpFrontendMsg
+    | RedditApiRequestMade_ (Result Http.Error String)
 
 
 type ToBackend
@@ -28,6 +30,7 @@ type ToBackend
 
 type BackendMsg
     = NoOpBackendMsg
+    | RedditApiRequestMade (Result Http.Error String)
 
 
 type ToFrontend
