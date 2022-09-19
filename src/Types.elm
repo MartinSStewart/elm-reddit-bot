@@ -3,17 +3,17 @@ module Types exposing (..)
 import Browser exposing (UrlRequest)
 import Browser.Navigation exposing (Key)
 import Http
+import Time
 import Url exposing (Url)
 
 
 type alias FrontendModel =
-    { key : Key
-    , message : String
-    }
+    { key : Key }
 
 
 type alias BackendModel =
-    { message : String
+    { previousThread : Url
+    , lastCheck : Maybe Time.Posix
     }
 
 

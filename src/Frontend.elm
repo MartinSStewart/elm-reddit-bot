@@ -26,11 +26,7 @@ app =
 
 init : Url.Url -> Nav.Key -> ( FrontendModel, Cmd FrontendMsg )
 init url key =
-    ( { key = key
-      , message = "Welcome to Lamdera! You're looking at the auto-generated base implementation. Check out src/Frontend.elm to start coding!"
-      }
-    , Process.sleep 1000 |> Task.andThen (\() -> Backend.requestAccessToken) |> Task.attempt RedditApiRequestMade_
-    )
+    ( { key = key }, Cmd.none )
 
 
 update : FrontendMsg -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
@@ -72,14 +68,5 @@ updateFromBackend msg model =
 view : FrontendModel -> Browser.Document FrontendMsg
 view model =
     { title = ""
-    , body =
-        [ Html.div [ Attr.style "text-align" "center", Attr.style "padding-top" "40px" ]
-            [ Html.img [ Attr.src "https://lamdera.app/lamdera-logo-black.png", Attr.width 150 ] []
-            , Html.div
-                [ Attr.style "font-family" "sans-serif"
-                , Attr.style "padding-top" "40px"
-                ]
-                [ Html.text model.message ]
-            ]
-        ]
+    , body = []
     }
