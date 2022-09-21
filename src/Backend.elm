@@ -6,6 +6,7 @@ import Duration
 import Effect.Command as Command exposing (BackendOnly, Command)
 import Effect.Http
 import Effect.Lamdera exposing (ClientId, SessionId)
+import Effect.Subscription as Subscriptions
 import Effect.Task as Task exposing (Task)
 import Effect.Time
 import Env
@@ -25,13 +26,20 @@ appFunctions =
     { init = init
     , update = update
     , updateFromFrontend = updateFromFrontend
-    , subscriptions = \_ -> Effect.Time.every Duration.hour CheckedTime
+    , subscriptions =
+        \_ ->
+            Subscriptions.batch
+                [ Effect.Time.every Duration.hour CheckedTime
+                , Effect.Lamdera.onConnect ClientConnected
+                ]
     }
 
 
 init : ( BackendModel, Command restriction toMsg BackendMsg )
 init =
-    ( { previousThread = defaultUrl, lastCheck = Nothing }, Task.perform CheckedTime Effect.Time.now )
+    ( { previousThread = defaultUrl, lastCheck = Nothing, errors = [] }
+    , Task.perform CheckedTime Effect.Time.now
+    )
 
 
 defaultUrl : Url
@@ -39,20 +47,16 @@ defaultUrl =
     Unsafe.url "https://www.reddit.com/r/elm/comments/xikc54/easy_questions_beginners_thread_week_of_20220919/"
 
 
-update : BackendMsg -> BackendModel -> ( BackendModel, Command BackendOnly toMsg BackendMsg )
+update : BackendMsg -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
 update msg model =
     case msg of
-        RedditApiRequestMade result ->
+        RedditApiRequestMade time result ->
             ( case result of
                 Ok url ->
                     { model | previousThread = url }
 
                 Err error ->
-                    let
-                        _ =
-                            Debug.log "error" error
-                    in
-                    model
+                    { model | errors = model.errors ++ [ { time = time, error = error } ] }
             , Command.none
             )
 
@@ -71,7 +75,7 @@ update msg model =
                                                 model.previousThread
                                                 token
                                         )
-                                    |> Task.attempt RedditApiRequestMade
+                                    |> Task.attempt (RedditApiRequestMade time)
 
                             else
                                 Command.none
@@ -82,6 +86,9 @@ update msg model =
                 Nothing ->
                     Command.none
             )
+
+        ClientConnected _ clientId ->
+            ( model, Effect.Lamdera.sendToFrontend clientId (SendErrors model.errors) )
 
 
 updateFromFrontend : SessionId -> ClientId -> ToBackend -> BackendModel -> ( BackendModel, Command restriction toMsg BackendMsg )

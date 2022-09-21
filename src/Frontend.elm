@@ -1,11 +1,16 @@
 module Frontend exposing (app, appFunctions)
 
 import Browser
+import Date
 import Effect.Browser.Navigation
 import Effect.Command as Command exposing (Command, FrontendOnly)
+import Effect.Http exposing (Error(..))
 import Effect.Lamdera
 import Effect.Subscription as Subscription exposing (Subscription)
+import Html
+import Iso8601
 import Lamdera
+import Time
 import Types exposing (..)
 import Url exposing (Url)
 
@@ -27,7 +32,7 @@ appFunctions =
 
 init : Url -> Effect.Browser.Navigation.Key -> ( FrontendModel, Command FrontendOnly ToBackend FrontendMsg )
 init url key =
-    ( { key = key }, Command.none )
+    ( { key = key, errors = Loading }, Command.none )
 
 
 update : FrontendMsg -> FrontendModel -> ( FrontendModel, Command FrontendOnly ToBackend FrontendMsg )
@@ -62,12 +67,43 @@ update msg model =
 updateFromBackend : ToFrontend -> FrontendModel -> ( FrontendModel, Command FrontendOnly toMsg FrontendMsg )
 updateFromBackend msg model =
     case msg of
-        NoOpToFrontend ->
-            ( model, Command.none )
+        SendErrors errors ->
+            ( { model | errors = Loaded errors }, Command.none )
 
 
 view : FrontendModel -> Browser.Document FrontendMsg
 view model =
-    { title = ""
-    , body = []
+    { title = "Reddit bot"
+    , body =
+        case model.errors of
+            Loading ->
+                [ Html.text "Loading..." ]
+
+            Loaded errors ->
+                List.map
+                    (\{ time, error } ->
+                        Html.div
+                            []
+                            [ Iso8601.fromTime time
+                                ++ ": "
+                                ++ (case error of
+                                        BadUrl url ->
+                                            "Bad url " ++ url
+
+                                        Timeout ->
+                                            "Timeout"
+
+                                        NetworkError ->
+                                            "NetworkError"
+
+                                        BadStatus int ->
+                                            "BadStatus " ++ String.fromInt int
+
+                                        BadBody string ->
+                                            "BadBody, " ++ string
+                                   )
+                                |> Html.text
+                            ]
+                    )
+                    errors
     }
