@@ -40,15 +40,66 @@ config =
                         }
 
             else if currentRequest.url == "https://oauth.reddit.com/api/submit" then
-                """{"jquery": [[0, 1, "call", ["body"]], [1, 2, "attr", "find"], [2, 3, "call", [".status"]], [3, 4, "attr", "hide"], [4, 5, "call", []], [5, 6, "attr", "html"], [6, 7, "call", [""]], [7, 8, "attr", "end"], [8, 9, "call", []], [1, 10, "attr", "redirect"], [10, 11, "call", ["https://www.reddit.com/r/elm/comments/xipj6t/easy_questions_beginners_thread_week_of_20220920/"]], [1, 12, "attr", "find"], [12, 13, "call", ["*[name=url]"]], [13, 14, "attr", "val"], [14, 15, "call", [""]], [15, 16, "attr", "end"], [16, 17, "call", []], [1, 18, "attr", "find"], [18, 19, "call", ["*[name=text]"]], [19, 20, "attr", "val"], [20, 21, "call", [""]], [21, 22, "attr", "end"], [22, 23, "call", []], [1, 24, "attr", "find"], [24, 25, "call", ["*[name=title]"]], [25, 26, "attr", "val"], [26, 27, "call", [" "]], [27, 28, "attr", "end"], [28, 29, "call", []]], "success": true}"""
-                    |> Bytes.Encode.string
-                    |> Bytes.Encode.encode
-                    |> GoodStatus_
-                        { url = currentRequest.url
-                        , statusCode = 200
-                        , statusText = "OK"
-                        , headers = Dict.empty
-                        }
+                case currentRequest.body of
+                    Effect.Test.StringBody { content } ->
+                        let
+                            maybeTitle : Maybe String
+                            maybeTitle =
+                                String.split "&" content
+                                    |> List.filterMap
+                                        (\text ->
+                                            case String.split "=" text |> List.map Url.percentDecode of
+                                                [ Just key, Just value ] ->
+                                                    Just ( key, value )
+
+                                                _ ->
+                                                    Nothing
+                                        )
+                                    |> Dict.fromList
+                                    |> Dict.get "title"
+                        in
+                        case maybeTitle of
+                            Just title ->
+                                let
+                                    sanitizedTitle : String
+                                    sanitizedTitle =
+                                        String.toLower title
+                                            |> String.replace " " "_"
+                                            |> String.replace "-" ""
+                                            |> String.replace "(" ""
+                                            |> String.replace ")" ""
+                                            |> String.replace "/" ""
+                                            |> String.replace "__" "_"
+                                in
+                                """{"jquery": [[0, 1, "call", ["body"]], [1, 2, "attr", "find"], [2, 3, "call", [".status"]], [3, 4, "attr", "hide"], [4, 5, "call", []], [5, 6, "attr", "html"], [6, 7, "call", [""]], [7, 8, "attr", "end"], [8, 9, "call", []], [1, 10, "attr", "redirect"], [10, 11, "call", ["https://www.reddit.com/r/elm/comments/xipj6t/"""
+                                    ++ sanitizedTitle
+                                    ++ """/"]], [1, 12, "attr", "find"], [12, 13, "call", ["*[name=url]"]], [13, 14, "attr", "val"], [14, 15, "call", [""]], [15, 16, "attr", "end"], [16, 17, "call", []], [1, 18, "attr", "find"], [18, 19, "call", ["*[name=text]"]], [19, 20, "attr", "val"], [20, 21, "call", [""]], [21, 22, "attr", "end"], [22, 23, "call", []], [1, 24, "attr", "find"], [24, 25, "call", ["*[name=title]"]], [25, 26, "attr", "val"], [26, 27, "call", [" "]], [27, 28, "attr", "end"], [28, 29, "call", []]], "success": true}"""
+                                    |> Bytes.Encode.string
+                                    |> Bytes.Encode.encode
+                                    |> GoodStatus_
+                                        { url = currentRequest.url
+                                        , statusCode = 200
+                                        , statusText = "OK"
+                                        , headers = Dict.empty
+                                        }
+
+                            Nothing ->
+                                BadStatus_
+                                    { url = currentRequest.url
+                                    , statusCode = 500
+                                    , statusText = "Bad request"
+                                    , headers = Dict.empty
+                                    }
+                                    (Bytes.Encode.sequence [] |> Bytes.Encode.encode)
+
+                    _ ->
+                        BadStatus_
+                            { url = currentRequest.url
+                            , statusCode = 500
+                            , statusText = "Bad request"
+                            , headers = Dict.empty
+                            }
+                            (Bytes.Encode.sequence [] |> Bytes.Encode.encode)
 
             else
                 NetworkError_
@@ -67,9 +118,14 @@ auth =
     Env.clientId ++ ":" ++ Env.secret |> Base64.fromString |> Maybe.withDefault ""
 
 
-previousThreadUrl : Url
-previousThreadUrl =
+previousThreadUrl0 : Url
+previousThreadUrl0 =
     Unsafe.url "https://www.reddit.com/r/elm/comments/xikc54/easy_questions_beginners_thread_week_of_20220919/"
+
+
+previousThreadUrl1 : Url
+previousThreadUrl1 =
+    Unsafe.url "https://www.reddit.com/r/elm/comments/xipj6t/easy_questions_beginners_thread_week_of_19700105/"
 
 
 suite : Test
@@ -80,13 +136,13 @@ suite =
         |> Effect.Test.simulateTime (Duration.days 4 |> Quantity.plus (Duration.hours 8))
         |> checkNoRequests
         |> Effect.Test.simulateTime (Duration.hours 2)
-        |> check (Date.fromCalendarDate 1970 Jan 5) 2
+        |> check previousThreadUrl0 (Date.fromCalendarDate 1970 Jan 5) 2
         |> Effect.Test.simulateTime (Duration.days 6)
-        |> check (Date.fromCalendarDate 1970 Jan 5) 2
+        |> check previousThreadUrl0 (Date.fromCalendarDate 1970 Jan 5) 2
         |> Effect.Test.simulateTime Duration.day
-        |> check (Date.fromCalendarDate 1970 Jan 12) 4
+        |> check previousThreadUrl1 (Date.fromCalendarDate 1970 Jan 12) 4
         |> Effect.Test.simulateTime Duration.day
-        |> check (Date.fromCalendarDate 1970 Jan 12) 4
+        |> check previousThreadUrl1 (Date.fromCalendarDate 1970 Jan 12) 4
         |> Effect.Test.toTest
 
 
@@ -112,13 +168,21 @@ checkNoRequests =
 
 
 check :
-    Date
+    Url
+    -> Date
     -> Int
     -> Effect.Test.Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> Effect.Test.Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-check latestRequestDate total =
+check previousThreadUrl latestRequestDate total =
     Effect.Test.checkState
         (\state ->
+            let
+                time =
+                    Duration.addTo Effect.Test.startTime state.elapsedTime
+
+                _ =
+                    Debug.log "time2" ( Time.toWeekday Time.utc time, Time.toHour Time.utc time )
+            in
             if total /= List.length state.httpRequests then
                 Err "Wrong number of requests made"
 
