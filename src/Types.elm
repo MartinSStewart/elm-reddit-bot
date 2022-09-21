@@ -29,8 +29,8 @@ type ToBackend
 
 
 type BackendMsg
-    = NoOpBackendMsg
-    | RedditApiRequestMade (Result Http.Error String)
+    = RedditApiRequestMade (Result Http.Error String)
+    | CheckedTime Time.Posix
 
 
 type ToFrontend

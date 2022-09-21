@@ -1,14 +1,15 @@
 module Backend exposing (..)
 
 import Base64
+import Date exposing (Date)
 import Env
-import Html
 import Http
 import Json.Decode exposing (Decoder)
 import Lamdera exposing (ClientId, SessionId)
-import Process
 import Task exposing (Task)
+import Time
 import Types exposing (..)
+import Unsafe
 import Url exposing (Url)
 
 
@@ -17,7 +18,7 @@ app =
         { init = init
         , update = update
         , updateFromFrontend = updateFromFrontend
-        , subscriptions = \m -> Sub.none
+        , subscriptions = \_ -> Time.every (60 * 60 * 1000) CheckedTime
         }
 
 
@@ -28,39 +29,20 @@ init =
 
 defaultUrl : Url
 defaultUrl =
-    unsafeUrl "https://www.reddit.com/r/elm/comments/xikc54/easy_questions_beginners_thread_week_of_20220919/"
-
-
-unsafeUrl : String -> Url
-unsafeUrl text =
-    case Url.fromString text of
-        Just url ->
-            url
-
-        Nothing ->
-            unreachable ()
-
-
-unreachable : () -> a
-unreachable () =
-    let
-        a =
-            (\() -> 0) == (\() -> 0)
-    in
-    unreachable ()
+    Unsafe.url "https://www.reddit.com/r/elm/comments/xikc54/easy_questions_beginners_thread_week_of_20220919/"
 
 
 update : BackendMsg -> BackendModel -> ( BackendModel, Cmd BackendMsg )
 update msg model =
     case msg of
-        NoOpBackendMsg ->
-            ( model, Cmd.none )
-
         RedditApiRequestMade result ->
             let
                 _ =
                     Debug.log "a" result
             in
+            ( model, Cmd.none )
+
+        CheckedTime time ->
             ( model, Cmd.none )
 
 
@@ -186,8 +168,8 @@ decodePart =
             )
 
 
-postBeginnerQuestionsThread : Url -> String -> Task Http.Error Url
-postBeginnerQuestionsThread previousThread accessToken =
+postBeginnerQuestionsThread : Date -> Url -> String -> Task Http.Error Url
+postBeginnerQuestionsThread postDate previousThread accessToken =
     Http.task
         { method = "POST"
         , headers = [ Http.header "authorization" ("bearer " ++ accessToken) ]
@@ -195,7 +177,9 @@ postBeginnerQuestionsThread previousThread accessToken =
         , body =
             0 formUrlencoded
                 [ ( "sr", "elm" )
-                , ( "title", "Easy Questions / Beginners Thread (Week of 2022-09-20)" )
+                , ( "title"
+                  , "Easy Questions / Beginners Thread (Week of " ++ Date.toIsoString postDate ++ ")"
+                  )
                 , ( "text", beginnerQuestionsBody previousThread )
                 , ( "kind", "self" )
                 ]
