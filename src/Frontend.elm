@@ -1,68 +1,67 @@
 module Frontend exposing (..)
 
-import Backend
-import Browser exposing (UrlRequest(..))
-import Browser.Navigation as Nav
-import Html
-import Html.Attributes as Attr
+import Browser
+import Effect.Browser.Navigation
+import Effect.Command as Command exposing (Command, FrontendOnly)
+import Effect.Lamdera
+import Effect.Subscription as Subscription exposing (Subscription)
 import Lamdera
-import Process
-import Task
 import Types exposing (..)
-import Url
+import Url exposing (Url)
 
 
 app =
-    Lamdera.frontend
+    Effect.Lamdera.frontend
+        Lamdera.sendToBackend
         { init = init
         , onUrlRequest = UrlClicked
         , onUrlChange = UrlChanged
         , update = update
         , updateFromBackend = updateFromBackend
-        , subscriptions = \m -> Sub.none
+        , subscriptions = \m -> Subscription.none
         , view = view
         }
 
 
-init : Url.Url -> Nav.Key -> ( FrontendModel, Cmd FrontendMsg )
+init : Url -> Effect.Browser.Navigation.Key -> ( FrontendModel, Command FrontendOnly ToBackend FrontendMsg )
 init url key =
-    ( { key = key }, Cmd.none )
+    ( { key = key }, Command.none )
 
 
-update : FrontendMsg -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
+update : FrontendMsg -> FrontendModel -> ( FrontendModel, Command FrontendOnly ToBackend FrontendMsg )
 update msg model =
     case msg of
         UrlClicked urlRequest ->
             case urlRequest of
-                Internal url ->
+                Browser.Internal url ->
                     ( model
-                    , Nav.pushUrl model.key (Url.toString url)
+                    , Effect.Browser.Navigation.pushUrl model.key (Url.toString url)
                     )
 
-                External url ->
+                Browser.External url ->
                     ( model
-                    , Nav.load url
+                    , Effect.Browser.Navigation.load url
                     )
 
         UrlChanged url ->
-            ( model, Cmd.none )
+            ( model, Command.none )
 
         NoOpFrontendMsg ->
-            ( model, Cmd.none )
+            ( model, Command.none )
 
         RedditApiRequestMade_ result ->
             let
                 _ =
                     Debug.log "a" result
             in
-            ( model, Cmd.none )
+            ( model, Command.none )
 
 
-updateFromBackend : ToFrontend -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
+updateFromBackend : ToFrontend -> FrontendModel -> ( FrontendModel, Command FrontendOnly toMsg FrontendMsg )
 updateFromBackend msg model =
     case msg of
         NoOpToFrontend ->
-            ( model, Cmd.none )
+            ( model, Command.none )
 
 
 view : FrontendModel -> Browser.Document FrontendMsg

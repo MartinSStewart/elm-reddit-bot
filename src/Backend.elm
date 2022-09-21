@@ -2,29 +2,34 @@ module Backend exposing (..)
 
 import Base64
 import Date exposing (Date)
+import Duration
+import Effect.Command as Command exposing (BackendOnly, Command)
+import Effect.Http
+import Effect.Lamdera exposing (ClientId, SessionId)
+import Effect.Task exposing (Task)
+import Effect.Time
 import Env
-import Http
 import Json.Decode exposing (Decoder)
-import Lamdera exposing (ClientId, SessionId)
-import Task exposing (Task)
-import Time
+import Lamdera
 import Types exposing (..)
 import Unsafe
 import Url exposing (Url)
 
 
 app =
-    Lamdera.backend
+    Effect.Lamdera.backend
+        Lamdera.broadcast
+        Lamdera.sendToFrontend
         { init = init
         , update = update
         , updateFromFrontend = updateFromFrontend
-        , subscriptions = \_ -> Time.every (60 * 60 * 1000) CheckedTime
+        , subscriptions = \_ -> Effect.Time.every Duration.hour CheckedTime
         }
 
 
-init : ( BackendModel, Cmd BackendMsg )
+init : ( BackendModel, Command restriction toMsg BackendMsg )
 init =
-    ( { previousThread = defaultUrl, lastCheck = Nothing }, Cmd.none )
+    ( { previousThread = defaultUrl, lastCheck = Nothing }, Command.none )
 
 
 defaultUrl : Url
@@ -32,7 +37,7 @@ defaultUrl =
     Unsafe.url "https://www.reddit.com/r/elm/comments/xikc54/easy_questions_beginners_thread_week_of_20220919/"
 
 
-update : BackendMsg -> BackendModel -> ( BackendModel, Cmd BackendMsg )
+update : BackendMsg -> BackendModel -> ( BackendModel, Command restriction toMsg BackendMsg )
 update msg model =
     case msg of
         RedditApiRequestMade result ->
@@ -40,17 +45,17 @@ update msg model =
                 _ =
                     Debug.log "a" result
             in
-            ( model, Cmd.none )
+            ( model, Command.none )
 
         CheckedTime time ->
-            ( model, Cmd.none )
+            ( model, Command.none )
 
 
-updateFromFrontend : SessionId -> ClientId -> ToBackend -> BackendModel -> ( BackendModel, Cmd BackendMsg )
+updateFromFrontend : SessionId -> ClientId -> ToBackend -> BackendModel -> ( BackendModel, Command restriction toMsg BackendMsg )
 updateFromFrontend sessionId clientId msg model =
     case msg of
         NoOpToBackend ->
-            ( model, Cmd.none )
+            ( model, Command.none )
 
 
 formUrlencoded : List ( String, String ) -> String
@@ -65,15 +70,15 @@ formUrlencoded object =
         |> String.join "&"
 
 
-requestAccessToken : Task Http.Error String
+requestAccessToken : Effect.Task.Task BackendOnly Effect.Http.Error String
 requestAccessToken =
     let
         auth =
             Env.clientId ++ ":" ++ Env.secret |> Base64.fromString |> Maybe.withDefault ""
     in
-    Http.task
+    Effect.Http.task
         { method = "POST"
-        , headers = [ Http.header "Authorization" ("Basic " ++ auth) ]
+        , headers = [ Effect.Http.header "Authorization" ("Basic " ++ auth) ]
         , url = "https://www.reddit.com/api/v1/access_token"
         , body =
             formUrlencoded
@@ -81,32 +86,32 @@ requestAccessToken =
                 , ( "username", Env.username )
                 , ( "password", Env.password )
                 ]
-                |> Http.stringBody "application/x-www-form-urlencoded"
+                |> Effect.Http.stringBody "application/x-www-form-urlencoded"
         , resolver =
-            Http.stringResolver
+            Effect.Http.stringResolver
                 (\response ->
                     case response of
-                        Http.BadUrl_ string ->
-                            Err (Http.BadUrl string)
+                        Effect.Http.BadUrl_ string ->
+                            Err (Effect.Http.BadUrl string)
 
-                        Http.Timeout_ ->
-                            Err Http.Timeout
+                        Effect.Http.Timeout_ ->
+                            Err Effect.Http.Timeout
 
-                        Http.NetworkError_ ->
-                            Err Http.NetworkError
+                        Effect.Http.NetworkError_ ->
+                            Err Effect.Http.NetworkError
 
-                        Http.BadStatus_ metadata body_ ->
-                            Err (Http.BadStatus metadata.statusCode)
+                        Effect.Http.BadStatus_ metadata body_ ->
+                            Err (Effect.Http.BadStatus metadata.statusCode)
 
-                        Http.GoodStatus_ metadata body_ ->
+                        Effect.Http.GoodStatus_ metadata body_ ->
                             case Json.Decode.decodeString accessTokenDecoder body_ of
                                 Ok ok ->
                                     Ok ok
 
                                 Err error ->
-                                    Http.BadBody (Json.Decode.errorToString error) |> Err
+                                    Effect.Http.BadBody (Json.Decode.errorToString error) |> Err
                 )
-        , timeout = Just 30000
+        , timeout = Just (Duration.seconds 30)
         }
 
 
@@ -168,11 +173,11 @@ decodePart =
             )
 
 
-postBeginnerQuestionsThread : Date -> Url -> String -> Task Http.Error Url
+postBeginnerQuestionsThread : Date -> Url -> String -> Task BackendOnly Effect.Http.Error Url
 postBeginnerQuestionsThread postDate previousThread accessToken =
-    Http.task
+    Effect.Http.task
         { method = "POST"
-        , headers = [ Http.header "authorization" ("bearer " ++ accessToken) ]
+        , headers = [ Effect.Http.header "authorization" ("bearer " ++ accessToken) ]
         , url = "https://oauth.reddit.com/api/submit"
         , body =
             0 formUrlencoded
@@ -183,30 +188,30 @@ postBeginnerQuestionsThread postDate previousThread accessToken =
                 , ( "text", beginnerQuestionsBody previousThread )
                 , ( "kind", "self" )
                 ]
-                |> Http.stringBody "application/x-www-form-urlencoded"
+                |> Effect.Http.stringBody "application/x-www-form-urlencoded"
         , resolver =
-            Http.stringResolver
+            Effect.Http.stringResolver
                 (\response ->
                     case response of
-                        Http.BadUrl_ string ->
-                            Err (Http.BadUrl string)
+                        Effect.Http.BadUrl_ string ->
+                            Err (Effect.Http.BadUrl string)
 
-                        Http.Timeout_ ->
-                            Err Http.Timeout
+                        Effect.Http.Timeout_ ->
+                            Err Effect.Http.Timeout
 
-                        Http.NetworkError_ ->
-                            Err Http.NetworkError
+                        Effect.Http.NetworkError_ ->
+                            Err Effect.Http.NetworkError
 
-                        Http.BadStatus_ metadata body_ ->
-                            Err (Http.BadStatus metadata.statusCode)
+                        Effect.Http.BadStatus_ metadata body_ ->
+                            Err (Effect.Http.BadStatus metadata.statusCode)
 
-                        Http.GoodStatus_ metadata body_ ->
+                        Effect.Http.GoodStatus_ metadata body_ ->
                             case Json.Decode.decodeString submitDecoder body_ of
                                 Ok ok ->
                                     Ok ok
 
                                 Err error ->
-                                    Http.BadBody (Json.Decode.errorToString error) |> Err
+                                    Effect.Http.BadBody (Json.Decode.errorToString error) |> Err
                 )
-        , timeout = Just 30000
+        , timeout = Just (Duration.seconds 30)
         }

@@ -1,27 +1,27 @@
 module Types exposing (..)
 
-import Browser exposing (UrlRequest)
-import Browser.Navigation exposing (Key)
-import Http
-import Time
+import Browser
+import Effect.Browser.Navigation exposing (Key)
+import Effect.Http
+import Effect.Time
 import Url exposing (Url)
 
 
 type alias FrontendModel =
-    { key : Key }
+    { key : Effect.Browser.Navigation.Key }
 
 
 type alias BackendModel =
     { previousThread : Url
-    , lastCheck : Maybe Time.Posix
+    , lastCheck : Maybe Effect.Time.Posix
     }
 
 
 type FrontendMsg
-    = UrlClicked UrlRequest
+    = UrlClicked Browser.UrlRequest
     | UrlChanged Url
     | NoOpFrontendMsg
-    | RedditApiRequestMade_ (Result Http.Error String)
+    | RedditApiRequestMade_ (Result Effect.Http.Error String)
 
 
 type ToBackend
@@ -29,8 +29,8 @@ type ToBackend
 
 
 type BackendMsg
-    = RedditApiRequestMade (Result Http.Error String)
-    | CheckedTime Time.Posix
+    = RedditApiRequestMade (Result Effect.Http.Error String)
+    | CheckedTime Effect.Time.Posix
 
 
 type ToFrontend
