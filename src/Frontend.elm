@@ -1,4 +1,4 @@
-module Frontend exposing (..)
+module Frontend exposing (app, appFunctions)
 
 import Browser
 import Effect.Browser.Navigation
@@ -11,16 +11,18 @@ import Url exposing (Url)
 
 
 app =
-    Effect.Lamdera.frontend
-        Lamdera.sendToBackend
-        { init = init
-        , onUrlRequest = UrlClicked
-        , onUrlChange = UrlChanged
-        , update = update
-        , updateFromBackend = updateFromBackend
-        , subscriptions = \m -> Subscription.none
-        , view = view
-        }
+    Effect.Lamdera.frontend Lamdera.sendToBackend appFunctions
+
+
+appFunctions =
+    { init = init
+    , onUrlRequest = UrlClicked
+    , onUrlChange = UrlChanged
+    , update = update
+    , updateFromBackend = updateFromBackend
+    , subscriptions = \m -> Subscription.none
+    , view = view
+    }
 
 
 init : Url -> Effect.Browser.Navigation.Key -> ( FrontendModel, Command FrontendOnly ToBackend FrontendMsg )

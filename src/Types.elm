@@ -29,7 +29,7 @@ type ToBackend
 
 
 type BackendMsg
-    = RedditApiRequestMade (Result Effect.Http.Error String)
+    = RedditApiRequestMade (Result Effect.Http.Error Url)
     | CheckedTime Effect.Time.Posix
 
 
