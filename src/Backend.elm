@@ -1,7 +1,7 @@
 module Backend exposing (app, appFunctions, beginnerQuestionsBody, formUrlencoded)
 
 import Base64
-import Date exposing (Date)
+import Date exposing (Date, Interval(..))
 import Duration
 import Effect.Command as Command exposing (BackendOnly, Command)
 import Effect.Http
@@ -11,7 +11,7 @@ import Effect.Time
 import Env
 import Json.Decode exposing (Decoder)
 import Lamdera
-import Time
+import Time exposing (Weekday(..))
 import Types exposing (..)
 import Unsafe
 import Url exposing (Url)
@@ -60,15 +60,24 @@ update msg model =
             ( { model | lastCheck = Just time }
             , case model.lastCheck of
                 Just lastCheck ->
-                    requestAccessToken
-                        |> Task.andThen
-                            (\token ->
-                                postBeginnerQuestionsThread
-                                    (Date.fromPosix Time.utc time)
-                                    model.previousThread
-                                    token
-                            )
-                        |> Task.attempt RedditApiRequestMade
+                    case ( Time.toWeekday Time.utc lastCheck, Time.toWeekday Time.utc lastCheck ) of
+                        ( Mon, Mon ) ->
+                            if Time.toHour Time.utc lastCheck < 10 && Time.toHour Time.utc time >= 10 then
+                                requestAccessToken
+                                    |> Task.andThen
+                                        (\token ->
+                                            postBeginnerQuestionsThread
+                                                (Date.fromPosix Time.utc time)
+                                                model.previousThread
+                                                token
+                                        )
+                                    |> Task.attempt RedditApiRequestMade
+
+                            else
+                                Command.none
+
+                        _ ->
+                            Command.none
 
                 Nothing ->
                     Command.none

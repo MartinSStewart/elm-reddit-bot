@@ -3,7 +3,7 @@ module Tests exposing (..)
 import Backend
 import Base64
 import Bytes.Encode
-import Date
+import Date exposing (Date)
 import Dict
 import Duration
 import Effect.Http exposing (Response(..))
@@ -12,10 +12,12 @@ import Env
 import Expect exposing (Expectation)
 import Frontend
 import Fuzz exposing (Fuzzer, int, list, string)
+import Quantity
 import Test exposing (..)
 import Time exposing (Month(..))
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendMsg, ToBackend, ToFrontend)
 import Unsafe
+import Url exposing (Url)
 
 
 config : Effect.Test.Config ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
@@ -56,25 +58,72 @@ config =
     }
 
 
+accessToken : String
 accessToken =
     "abc123"
 
 
+auth =
+    Env.clientId ++ ":" ++ Env.secret |> Base64.fromString |> Maybe.withDefault ""
+
+
+previousThreadUrl : Url
 previousThreadUrl =
     Unsafe.url "https://www.reddit.com/r/elm/comments/xikc54/easy_questions_beginners_thread_week_of_20220919/"
 
 
 suite : Test
 suite =
-    let
-        auth =
-            Env.clientId ++ ":" ++ Env.secret |> Base64.fromString |> Maybe.withDefault ""
-    in
     Effect.Test.start config "Happy path"
-        |> Effect.Test.simulateTime (Duration.minutes 61)
-        |> Effect.Test.checkState
-            (\state ->
-                case state.httpRequests of
+        |> Effect.Test.simulateTime (Duration.hours 1.01)
+        |> checkNoRequests
+        |> Effect.Test.simulateTime (Duration.days 4 |> Quantity.plus (Duration.hours 8))
+        |> checkNoRequests
+        |> Effect.Test.simulateTime (Duration.hours 2)
+        |> check (Date.fromCalendarDate 1970 Jan 5) 2
+        |> Effect.Test.simulateTime (Duration.days 6)
+        |> check (Date.fromCalendarDate 1970 Jan 5) 2
+        |> Effect.Test.simulateTime Duration.day
+        |> check (Date.fromCalendarDate 1970 Jan 12) 4
+        |> Effect.Test.simulateTime Duration.day
+        |> check (Date.fromCalendarDate 1970 Jan 12) 4
+        |> Effect.Test.toTest
+
+
+checkNoRequests :
+    Effect.Test.Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> Effect.Test.Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+checkNoRequests =
+    Effect.Test.checkState
+        (\state ->
+            let
+                time =
+                    Duration.addTo Effect.Test.startTime state.elapsedTime
+
+                _ =
+                    Debug.log "time" ( Time.toWeekday Time.utc time, Time.toHour Time.utc time )
+            in
+            if state.httpRequests == [] then
+                Ok ()
+
+            else
+                Err "No requests should be sent yet."
+        )
+
+
+check :
+    Date
+    -> Int
+    -> Effect.Test.Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> Effect.Test.Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+check latestRequestDate total =
+    Effect.Test.checkState
+        (\state ->
+            if total /= List.length state.httpRequests then
+                Err "Wrong number of requests made"
+
+            else
+                case List.take 2 state.httpRequests of
                     [ request2, request1 ] ->
                         let
                             expected1 : Effect.Test.HttpRequest
@@ -107,7 +156,7 @@ suite =
                                                 [ ( "sr", "elm" )
                                                 , ( "title"
                                                   , "Easy Questions / Beginners Thread (Week of "
-                                                        ++ Date.toIsoString (Date.fromCalendarDate 1970 Jan 1)
+                                                        ++ Date.toIsoString latestRequestDate
                                                         ++ ")"
                                                   )
                                                 , ( "text", Backend.beginnerQuestionsBody previousThreadUrl )
@@ -133,5 +182,4 @@ suite =
 
                     _ ->
                         Err "Wrong number of requests made"
-            )
-        |> Effect.Test.toTest
+        )
